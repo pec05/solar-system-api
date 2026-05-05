@@ -5,6 +5,10 @@ import com.peccio.solar_system_api.model.Planet;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -17,7 +21,18 @@ import java.util.Map;
 public class SolarApiClient {
 
     private final RestTemplate restTemplate;
-    private String baseUrl;
+    private final String baseUrl;
+    private final String apiKey;
+
+    public SolarApiClient(
+            @Value("${solar.api.base-url}") String baseUrl,
+            @Value("${solar.api.key}") String apiKey
+    ){
+        this.restTemplate = new RestTemplate();
+        this.baseUrl = baseUrl;
+        this.apiKey = apiKey;
+
+    }
 
     //Distance moyenne en UA (Unité astronomique)
     private static final Map<String, Double> DISTANCES_UA = Map.of(
@@ -43,24 +58,26 @@ public class SolarApiClient {
             "neptune", "assets/textures/neptune.jpg"
     );
 
-    public SolarApiClient(@Value("${solar.api.base-url}") String baseUrl) {
-        this.restTemplate = new RestTemplate();
-        this.baseUrl = baseUrl;
-    }
-
     @Cacheable("planets")
     public List<Planet> getAllPlanets() {
         log.info("Fetching planets from external API...");
 
         String url = baseUrl + "/bodies?filter[]=isPlanet,eq,true&filter[]=bodyType,eq,Planet";
-        ApiResponse response = restTemplate.getForObject(url, ApiResponse.class);
 
-        if (response == null || response.getBodies() == null) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(apiKey);
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<ApiResponse> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, ApiResponse.class
+        );
+
+        if (response.getBody() == null || response.getBody().getBodies() == null) {
             log.error("No data received from Solar System API");
             return List.of();
         }
 
-        return Arrays.stream(response.getBodies())
+        return Arrays.stream(response.getBody().getBodies())
                 .map(this::mapToPlanet)
                 .toList();
     }
@@ -68,9 +85,18 @@ public class SolarApiClient {
     @Cacheable("planet")
     public Planet getPlanetById(String id) {
         log.info("Fetching planet: {}", id);
+
         String url = baseUrl + "/bodies/" + id;
-        ApiBody body = restTemplate.getForObject(url, ApiBody.class);
-        return body != null ? mapToPlanet(body) : null;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(apiKey);
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<ApiBody> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity, ApiBody.class
+        );
+
+        return response.getBody() != null ? mapToPlanet(response.getBody()) : null;
     }
 
     private Planet mapToPlanet(ApiBody body) {

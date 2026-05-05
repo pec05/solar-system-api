@@ -1,0 +1,5 @@
+spring.application.name=solar-system-api
+solar.api.base-url=https://api.le-systeme-solaire.net/rest
+solar.api.key=YOUR_API_KEY_HERE
+spring.cache.type=simple
+server.port=8080
